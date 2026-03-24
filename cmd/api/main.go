@@ -4,6 +4,8 @@ import (
 	"fmt" //manipular textos y pintar en consola
 	"log" //manejar errores
 	"net/http" //manejar peticiones web
+
+	"context_engine/internal/api" //importamos el router y asi ....
 )
 
 //fmt.Println() -> para imprimir en consola normal
@@ -11,14 +13,12 @@ import (
 //fmt.Printf() -> para imprimir con formato %s, %d, %f, etc EXTRA.....
 
 func main() {
-	// 1. Configuramos una ruta de prueba súper tonta
-	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "¡El servidor de Go está vivo bro!")
-	})
-	// 2. Encendemos el motor en el puerto 8080
+	// 1. Todas las rutas de api (variable router en new objeto api)
+	router := api.SetupRouter()
+	// 2. Encender el servidor en el puerto 8090
 	fmt.Println("🚀 Servidor arrancando en http://localhost:8090 ...")
 	
-	err := http.ListenAndServe(":8090", nil)
+	err := http.ListenAndServe(":8090", router)
 	if err != nil {
 		log.Fatal("❌ Error fatal:", err)
 	}
