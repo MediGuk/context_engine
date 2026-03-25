@@ -11,7 +11,7 @@ func SetupRouter() *http.ServeMux {
 	// 1. Creamos un nuevo enrutador limpio de Go
 	mux := http.NewServeMux()
 
-	// 2. Registrar TODAS las rutas con middleware
+	// 2. Registrar TODAS las rutas con middleware y POST o GET para el filtros !!!
 	mux.HandleFunc("POST /api/triage-context", middlewares.ValidateJWT(handlers.TriageContextHandler))
 	// .... mas rutas .....
 

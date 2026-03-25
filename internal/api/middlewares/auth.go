@@ -7,26 +7,35 @@ import (
 	"net/http"
 
 	"context_engine/internal/config"
+
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // ValidateJWT envuelve a un Handler para protegerlo (EdDSA + Cookies + Fingerprint)
 func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
-	
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		
-		// 1. Extraer el Pasaporte y la Huella desde las Cookies
-		// (Asegúrate de que los nombres coinciden con las cookies de Spring Boot)
-		jwtCookie, errJWT := r.Cookie("accessToken")
+
+		// 1. EXTRAER JWT (DE LA CABECERA) Y FINGERPRINT (DE LA COOKIE)
+
+		// A. Extraer JWT del Header Bearer (mejor que split que un hacker puede mandar millones de vacio)
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" || len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			fmt.Println("🔴 Denegado: Falta token Bearer en cabecera")
+			http.Error(w, "Acceso Denegado", http.StatusUnauthorized)
+			return
+		}
+		tokenRecibido := authHeader[7:]
+
+		// B. Extraer lCookie (Fingerprint)
 		fgpCookie, errFGP := r.Cookie("fingerprint")
-		
-		if errJWT != nil || errFGP != nil {
-			fmt.Println("🔴 Acceso Denegado: Faltan cookies de seguridad")
+		if errFGP != nil {
+			fmt.Println("🔴 Acceso Denegado: Falta cookie de seguridad Fingerprint")
 			http.Error(w, "Acceso Denegado", http.StatusUnauthorized)
 			return
 		}
 
-		// 2. Parseamos la clave pública de texto a formato criptográfico de Go
+		// 2. Parse public_key de texto a formato criptográfico de Go
 		parsedKey, err := jwt.ParseEdPublicKeyFromPEM([]byte(config.Envs.RSAPublicKey))
 		if err != nil {
 			fmt.Println("❌ Error de Servidor: Llave pública mal formateada", err)
@@ -34,8 +43,8 @@ func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 3. Comprobamos matemáticamente el token contra nuestra llave pública
-		token, err := jwt.Parse(jwtCookie.Value, func(t *jwt.Token) (interface{}, error) {
+		// 3. Token vs public_key (check matematico)
+		token, err := jwt.Parse(tokenRecibido, func(t *jwt.Token) (interface{}, error) {
 			//Protección extra: confirmar que nadie nos ha colado un token firmado con otro algoritmo
 			if _, ok := t.Method.(*jwt.SigningMethodEd25519); !ok {
 				return nil, fmt.Errorf("método de firma hackeado")
