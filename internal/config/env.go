@@ -33,7 +33,7 @@ func LoadEnv() {
 		Port: os.Getenv("PORT"),
 		FrontURL: os.Getenv("FRONT_URL"),
 		GroqKey: os.Getenv("GROQ_API_KEY"),
-		RSAPublicKey: os.Getenv("MEDIA_ENGINE_PUBLIC_KEY"),
+		RSAPublicKey: os.Getenv("JWT_PUBLIC_KEY"),
 	}
 
 	// 3. VALIDAR variables al ARRANCAR
@@ -50,7 +50,7 @@ func LoadEnv() {
 	}
 	// RSAPublicKey null
 	if Envs.RSAPublicKey == "" {
-		log.Fatal("❌ ERROR CRÍTICO: MEDIA_ENGINE_PUBLIC_KEY (Llave de Spring Boot) no está configurada. El servidor se niega a arrancar.")
+		log.Fatal("❌ ERROR CRÍTICO: JWT_PUBLIC_KEY (Llave de Spring Boot) no está configurada. El servidor se niega a arrancar.")
 	}
 	// Limpiamos llave RSA de saltos \n
 	Envs.RSAPublicKey = strings.ReplaceAll(Envs.RSAPublicKey, `\n`, "\n")
