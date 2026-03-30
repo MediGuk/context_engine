@@ -1,4 +1,5 @@
 package main
+//go run cmd/api/main.go
 
 import (
 	"fmt"      //manipular textos y pintar en consola
@@ -15,8 +16,9 @@ import (
 //fmt.Printf() -> para imprimir con formato %s, %d, %f, etc EXTRA.....
 
 func main() {
-	// 1. Cargar y validar variables de entorno
-	config.LoadEnv()
+	// 1. 
+	config.LoadEnv() 		// Cargar y validar variables de entorno	
+	config.ConnectRedis() 	// Conectar a la base de datos de colas
 
 	// 2. Todas las rutas de api (variable router en new objeto api)
 	router := api.SetupRouter()

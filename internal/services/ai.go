@@ -44,7 +44,7 @@ func TranscribeAudio(file io.Reader, filename string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType()) //Header dice a Groq tipo de carta que mandamos
+	req.Header.Set("Content-Type", writer.FormDataContentType())   //Header dice a Groq tipo de carta que mandamos
 	req.Header.Set("Authorization", "Bearer "+config.Envs.GroqKey) //Header dice a Groq nuestra llave
 
 	// 6. ¡DISPARAR! Hacemos la llamada real a internet
@@ -68,13 +68,13 @@ func TranscribeAudio(file io.Reader, filename string) (string, error) {
 	return result.Text, nil
 }
 
-//***********************************************************************************************************
-// AnalyzeTriage recibe el texto (del paciente o de Whisper) y le pide a LLaMA un JSON estructurado
-func AnalyzeTriage(patientText string) (string, error) {
+// ***********************************************************************************************************
+// AnalyzeTriage recibe el texto (del paciente o de Whisper) y el contexto acumulado
+func AnalyzeTriage(patientText string, previousContext string) (string, error) {
 	fmt.Printf("🧠 Enviando a LLaMA 3...\n")
 
 	// 1. Prepara Prompt estricto (se le pide que devuelva JSON)
-	prompt := buildLlamaPrompt(patientText)
+	prompt := buildLlamaPrompt(patientText, previousContext)
 
 	// 2. Fabricar el JSON para enviar a la API de Chat (LLaMA)
 	payload := map[string]interface{}{
@@ -83,7 +83,7 @@ func AnalyzeTriage(patientText string) (string, error) {
 			{"role": "user", "content": prompt},
 		},
 		"response_format": map[string]string{"type": "json_object"}, // ¡Forzar salida JSON perfecta!
-		"temperature":     0.0, // Cero alucinaciones (robotico y exacto)
+		"temperature":     0.0,                                      // Cero alucinaciones (robotico y exacto)
 	}
 	payloadBytes, _ := json.Marshal(payload)
 
@@ -109,7 +109,7 @@ func AnalyzeTriage(patientText string) (string, error) {
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	
+
 	// Parseamos el JSON y cuidaod eroro si lista está vacia
 	if err := json.Unmarshal(bodyBytes, &output); err != nil || len(output.Choices) == 0 {
 		return "", fmt.Errorf("respuesta de la IA corrupta o vacía") // Return error
@@ -118,13 +118,36 @@ func AnalyzeTriage(patientText string) (string, error) {
 	return output.Choices[0].Message.Content, nil // Return respuesta limpia
 }
 
-// Funcion privada para prompt perfecto
-func buildLlamaPrompt(input string) string {
-	return `Eres un asistente médico experto en triaje. Revisa esto: "` + input + `". 
-Genera un resultado en estricto formato JSON con esta estructura:
-{
-  "urgency": "Alta|Media|Baja",
-  "recommended_specialty": "Nombre especialidad",
-  "summary": "Resumen claro..."
-}`
+// Funcion privada para prompt de mapeo clínico incremental
+func buildLlamaPrompt(input string, previousContext string) string {
+	if previousContext == "" {
+		previousContext = "Ninguna información previa detectada."
+	}
+
+	return `Eres un extractor de entidades clínicas de alta precisión. Tu objetivo es actualizar el estado clínico del paciente basándote en la "Información Nueva" y manteniendo la coherencia con el "Contexto Acumulado".
+
+	### CONTEXTO ACUMULADO (Lo que ya sabemos):
+	` + previousContext + `
+
+	### INFORMACIÓN NUEVA (Lo que el paciente acaba de decir):
+	"` + input + `"
+
+	### REGLAS DE ORO:
+	1. Si la entrada nueva aclara un dato que estaba en "datos_faltantes", muévelo a "entidades_detectadas" con su término médico.
+	2. Si la entrada nueva contradice el contexto anterior, prioriza lo más reciente.
+	3. NO inventes datos. Si algo sigue sin saberse, mantenlo en "datos_faltantes".
+	4. CLAVES_ESTÁNDAR para datos_faltantes: zona_afectada, cronopatologia, tipo_sintoma, escala_dolor, sintomas_asociados, factores_disparadores.
+
+	### RESPUESTA EN JSON ESTRICTO:
+	{
+	"extraData": {
+		"anatomSite": "término médico (ej: región lumbar, antebrazo) o null",
+		"onset": "duración/frecuencia (ej: hace 2 días, intermitente) o null",
+		"technicalDetails": "otros detalles clínicos relevantes",
+		"severity": "1-10 o null"
+	},
+	"suggestedCategory": "Dermatología|Digestivo|Cardiovascular|Musculoesquelético|etc",
+	"datos_faltantes": ["lista_de_claves_estandar"],
+	"resumenClinico": "Breve frase técnica del estado actual"
+	}`
 }

@@ -1,6 +1,7 @@
 package middlewares
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -36,7 +37,7 @@ func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// 2. Parse public_key de texto a formato criptográfico de Go
-		parsedKey, err := jwt.ParseEdPublicKeyFromPEM([]byte(config.Envs.RSAPublicKey))
+		parsedKey, err := jwt.ParseEdPublicKeyFromPEM([]byte(config.Envs.JwtPublicKey))
 		if err != nil {
 			fmt.Println("❌ Error de Servidor: Llave pública mal formateada", err)
 			http.Error(w, "Error interno", http.StatusInternalServerError)
@@ -65,8 +66,13 @@ func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// --- NUEVO: Extraer Identidad del Usuario para Redis ---
+		userID, _ := claims["sub"].(string)
+		// "sub" es el estándar de JWT que Java rellena con .subject()
+		// --------------------------------------------------------
+
 		// Leemos la copia de la huella que escondió Spring Boot
-		hashEnJWT, ok := claims["fgp_hash"].(string)
+		hashEnJWT, ok := claims["fingerprintHash"].(string)
 		if !ok {
 			fmt.Println("🔴 Denegado: Token sin tecnología Fingerprint")
 			http.Error(w, "Token sin seguridad", http.StatusUnauthorized)
@@ -85,8 +91,20 @@ func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// 5. ¡VISTA BUENA! Todo cuadra matemáticamente
-		fmt.Println("✅ Seguridad pasadísima. JWT Ed25519 y Huella coinciden.")
-		next.ServeHTTP(w, r)
+		fmt.Printf("✅ Seguridad pasadísima. JWT de Usuario [%s] validado.\n", userID)
+
+		// 5. Inyectamos el userID en el "contexto"(mochila) de ESTA petición (para que el Handler lo pueda leer)
+
+		// 5.1 Extraer "context"(mochila) de la peticion actual
+		originalCtx := r.Context()
+		// 5.2 Crear key especial para evitar colisiones
+		type contextKey string
+		// 5.3 Crear nueva "context"(mochila) con el userID
+		newCtx := context.WithValue(originalCtx, contextKey("userID"), userID)
+
+		// 5.4 Crear una nueva peticion con el nuevo contexto
+		newRequest := r.WithContext(newCtx)
+		// 5.5 Llamar al siguiente handler con la nueva peticion
+		next.ServeHTTP(w, newRequest)
 	}
 }
