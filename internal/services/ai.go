@@ -133,10 +133,15 @@ func buildLlamaPrompt(input string, previousContext string) string {
 	"` + input + `"
 
 	### REGLAS DE ORO:
-	1. Si la entrada nueva aclara un dato que estaba en "datos_faltantes", muévelo a "entidades_detectadas" con su término médico.
-	2. Si la entrada nueva contradice el contexto anterior, prioriza lo más reciente.
-	3. NO inventes datos. Si algo sigue sin saberse, mantenlo en "datos_faltantes".
-	4. CLAVES_ESTÁNDAR para datos_faltantes: zona_afectada, cronopatologia, tipo_sintoma, escala_dolor, sintomas_asociados, factores_disparadores.
+	1. Si la entrada nueva aclara un dato que estaba en "datos_faltantes", complétalo en "extraData" y ELIMÍNALO DE "datos_faltantes".
+	2. MAPEO OBLIGATORIO para eliminar de "datos_faltantes":
+	   - Si 'anatomSite' NO es null -> elimina 'zona_afectada'.
+	   - Si 'onset' NO es null -> elimina 'cronopatologia'.
+	   - Si 'severity' NO es null -> elimina 'escala_dolor'.
+	   - Si 'technicalDetails' o 'resumenClinico' aclaran el tipo de síntoma, síntomas asociados o disparadores -> elimina 'tipo_sintoma', 'sintomas_asociados' o 'factores_disparadores' respectivamente.
+	3. Si la entrada nueva contradice el contexto anterior, prioriza lo más reciente.
+	4. NO inventes datos. Si algo sigue sin saberse, mantenlo en "datos_faltantes".
+	5. CLAVES_ESTÁNDAR para datos_faltantes: zona_afectada, cronopatologia, tipo_sintoma, escala_dolor, sintomas_asociados, factores_disparadores.
 
 	### RESPUESTA EN JSON ESTRICTO:
 	{
@@ -147,7 +152,7 @@ func buildLlamaPrompt(input string, previousContext string) string {
 		"severity": "1-10 o null"
 	},
 	"suggestedCategory": "Dermatología|Digestivo|Cardiovascular|Musculoesquelético|etc",
-	"datos_faltantes": ["lista_de_claves_estandar"],
+	"datos_faltantes": ["lista_de_claves_estandar_restantes"],
 	"resumenClinico": "Breve frase técnica del estado actual"
 	}`
 }
