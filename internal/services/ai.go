@@ -140,8 +140,10 @@ func buildLlamaPrompt(input string, previousContext string) string {
 	   - Si 'severity' NO es null -> elimina 'escala_dolor'.
 	   - Si 'technicalDetails' o 'resumenClinico' aclaran el tipo de síntoma, síntomas asociados o disparadores -> elimina 'tipo_sintoma', 'sintomas_asociados' o 'factores_disparadores' respectivamente.
 	3. Si la entrada nueva contradice el contexto anterior, prioriza lo más reciente.
-	4. NO inventes datos. Si algo sigue sin saberse, mantenlo en "datos_faltantes".
-	5. CLAVES_ESTÁNDAR para datos_faltantes: zona_afectada, cronopatologia, tipo_sintoma, escala_dolor, sintomas_asociados, factores_disparadores.
+	4. Si "datos_faltantes" queda VACÍO, marca "is_complete": true.
+	5. TONO DE CIERRE: Si "is_complete" es true, el "resumenClinico" debe terminar con una frase de cierre profesional preguntando si desea añadir algo más o si enviamos el informe al médico.
+	6. NO inventes datos. Si algo sigue sin saberse, mantenlo en "datos_faltantes".
+	7. CLAVES_ESTÁNDAR para datos_faltantes: zona_afectada, cronopatologia, tipo_sintoma, escala_dolor, sintomas_asociados, factores_disparadores.
 
 	### RESPUESTA EN JSON ESTRICTO:
 	{
@@ -153,6 +155,7 @@ func buildLlamaPrompt(input string, previousContext string) string {
 	},
 	"suggestedCategory": "Dermatología|Digestivo|Cardiovascular|Musculoesquelético|etc",
 	"datos_faltantes": ["lista_de_claves_estandar_restantes"],
-	"resumenClinico": "Breve frase técnica del estado actual"
+	"is_complete": boolean,
+	"resumenClinico": "Breve frase técnica + Frase de cierre si procede"
 	}`
 }

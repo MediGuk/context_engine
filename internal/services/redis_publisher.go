@@ -24,10 +24,10 @@ func PublishTriage(ctx context.Context, userID string, aiJSON string, imageUrl s
 	finalReport := JavaTriageRequest{
 		Id:                utils.GenerateID(), // ID ÚNICO via utilitario
 		PatientId:         userID,             // ID del Paciente (Verificado por JWT!)
-		SuggestedCategory: contextRaw.SuggestedCategory,
-		ResumeClinic:      contextRaw.ResumeClinic,
+		SuggestedCategory: contextRaw.SuggestedCategory, // Categoria sugerida por la IA
+		ResumeClinic:      contextRaw.ResumeClinic, // Resumen clinico del paciente
 		ImageUrl:          imageUrl, // URL de S3 enviada por Go
-		ExtraData:         contextRaw.ExtraData,
+		ExtraData:         contextRaw.ExtraData, // Todo detalles tecnicos que ia ha detectado
 	}
 
 	// 3. Volver a empaquetar todo para la cola
