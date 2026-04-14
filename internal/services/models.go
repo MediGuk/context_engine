@@ -55,6 +55,7 @@ type ProtocolData struct {
 	CurrentContext  string
 	QuestionHistory []string
 	DeniedSymptoms  []string
+	PatientInput    string
 }
 
 // SummarizerData define los campos para el prompt del clinical_summarizer.txt
@@ -64,7 +65,7 @@ type SummarizerData struct {
 
 // TriageResponse es el contrato de salida hacia el Frontend (React/Next.js)
 type TriageResponse struct {
-	Questions   []string `json:"questions"`    // Lista de preguntas que debe mostrar el front
+	Question    string   `json:"question"`     // Pregunta única que debe mostrar el front
 	CaseTitle   string   `json:"case_title"`   // Título dinámico (ej: "Dolor abdominal")
 	IsComplete  bool     `json:"is_complete"`  // Flag para saber si hemos terminado
 	IsEmergency bool     `json:"is_emergency"` // Flag de urgencia vital

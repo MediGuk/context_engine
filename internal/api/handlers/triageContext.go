@@ -147,11 +147,11 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 	updatedJSON, _ := json.Marshal(contextRaw)
 	_ = services.SaveClinicalContext(ctx, userID, string(updatedJSON))
 
-	fmt.Printf("🤖 IA responde: %d preguntas (Complete: %v, Emerg: %v)\n", len(responseMessage), contextRaw.IsComplete, contextRaw.IsEmergency)
+	fmt.Printf("🤖 IA responde: [%s] (Complete: %v, Emerg: %v)\n", responseMessage, contextRaw.IsComplete, contextRaw.IsEmergency)
 
 	// 5. Devolver la respuesta "Limpia" al Frontend (Usando Struct Tipado)
 	responseObj := services.TriageResponse{
-		Questions:   responseMessage,
+		Question:    responseMessage,
 		CaseTitle:   contextRaw.CaseTitle,
 		IsComplete:  contextRaw.IsComplete,
 		IsEmergency: contextRaw.IsEmergency,

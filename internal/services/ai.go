@@ -71,7 +71,7 @@ func TranscribeAudio(file io.Reader, filename string) (string, error) {
 }
 
 // AnalyzeTriageElite orquesta las 3 fases del triaje inteligente
-func AnalyzeTriageElite(patientInput string, context *TriageContext) ([]string, error) {
+func AnalyzeTriageElite(patientInput string, context *TriageContext) (string, error) {
 	// --- REGISTRO DE TRANSCRIPT (Caja Negra) ---
 	turnKey := "INITIAL"
 	if len(context.LastTurnQuestions) > 0 {
@@ -92,12 +92,12 @@ func AnalyzeTriageElite(patientInput string, context *TriageContext) ([]string, 
 		PatientInput:    patientInput,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	extractorJSON, err := callLLM(extractorPrompt, true) // Forzamos JSON
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	fmt.Printf("🔍 [DEBUG] Extractor RAW JSON: %s\n", extractorJSON)
 
@@ -140,28 +140,29 @@ func AnalyzeTriageElite(patientInput string, context *TriageContext) ([]string, 
 		CurrentContext:  symptomsToText(context.Symptoms),
 		QuestionHistory: context.QuestionHistory,
 		DeniedSymptoms:  context.DeniedSymptoms,
+		PatientInput:    patientInput,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	protocolJSON, err := callLLM(protocolPrompt, true)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	fmt.Printf("🔍 [DEBUG] Protocol RAW JSON: %s\n", protocolJSON)
 
 	var protocolData struct {
-		Questions  []string `json:"questions"`
-		IsComplete bool     `json:"is_complete"`
+		Question   string `json:"question"`
+		IsComplete bool   `json:"is_complete"`
 	}
 	json.Unmarshal([]byte(protocolJSON), &protocolData)
 
 	context.IsComplete = protocolData.IsComplete
-	// Añadimos las nuevas preguntas al historial acumulado
-	if len(protocolData.Questions) > 0 {
-		context.QuestionHistory = append(context.QuestionHistory, protocolData.Questions...)
-		context.LastTurnQuestions = protocolData.Questions // Guardamos para el próximo turno del Transcript
+	// Añadimos la nueva pregunta al historial acumulado
+	if protocolData.Question != "" {
+		context.QuestionHistory = append(context.QuestionHistory, protocolData.Question)
+		context.LastTurnQuestions = []string{protocolData.Question}
 	} else {
 		context.LastTurnQuestions = nil
 	}
@@ -186,7 +187,7 @@ func AnalyzeTriageElite(patientInput string, context *TriageContext) ([]string, 
 		}
 	}
 
-	return protocolData.Questions, nil
+	return protocolData.Question, nil
 }
 
 // --- UTILIDADES INTERNAS ---

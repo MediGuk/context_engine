@@ -8,18 +8,14 @@
 "{{.PatientInput}}"
 
 ### INSTRUCCIONES DE EXTRACCIÓN:
-1. Analiza la "Nueva Respuesta" teniendo en cuenta la "Última Pregunta" para desambiguar.
-2. Identifica los síntomas (Keys) clínicos detectados.
-3. EXTRAE ATRIBUTOS GENERALES en "attributes" (si están presentes):
-   - "onset": ¿Desde cuándo ocurre? (Ej: "hace 2 días", "desde esta mañana").
-   - "location": ¿En qué parte del cuerpo? (Ej: "abdomen bajo derecho", "lumbar").
-   - "severity": Intensidad, grado o evolución (Ej: "muy fuerte", "38.5 grados", "intermitente").
-4. TRATAMIENTO DE NEGACIONES (CRÍTICO): Si el paciente niega tener un síntoma o dice que NO lo tiene (ej: "sin vómitos", "no tengo fiebre"), DEBES añadir el término médico a "denied_symptoms" y NUNCA incluirlo en "symptoms". Prohibido mezclar negaciones dentro de la descripción de otros síntomas.
-5. Si el paciente menciona algo que ya sabíamos, actualiza la info con el dato más reciente.
-6. Identifica el SÍNTOMA PRINCIPAL (el motivo de consulta más importante) y genera un "case_title" (Título del Caso) de máximo 4 palabras.
-   - Ejemplo: si hay dolor abdominal fuerte, el título es "Dolor abdominal agudo".
-   - Ejemplo: si hay fiebre y tos, el título es "Cuadro febril respiratorio".
-7. Detecta situaciones de riesgo vital en "is_emergency".
+1. Analiza la "Nueva Respuesta" teniendo en cuenta la "Última Pregunta" y el "CONTEXTO CLÍNICO PREVIO".
+2. SALIDA COMPLETA (CRÍTICO): Tu JSON debe incluir TODOS los síntomas detectados hasta ahora (los del contexto previo + los nuevos), para que no se pierda información en los saltos de turno.
+3. PERSISTENCIA: No elimines síntomas que ya sabíamos a menos que el paciente diga explícitamente que han desaparecido.
+4. EXTRACCIÓN DE ATRIBUTOS (CRÍTICO): 
+   - Para cada síntoma, busca: "onset", "location" y "severity". 
+   - REGLA DE VERACIDAD: Si el paciente NO da un dato claro para un atributo, usa null. NUNCA inventes valores.
+5. TRATAMIENTO DE NEGACIONES: Si el paciente niega algo (ej: "no tengo fiebre"), añádelo a "denied_symptoms".
+6. SÍNTOMA PRINCIPAL: Determina el "case_title" (Título del Caso) más representativo.
 
 ### FORMATO DE SALIDA (JSON ESTRICTO):
 {
