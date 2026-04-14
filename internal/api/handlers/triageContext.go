@@ -1,22 +1,33 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"context_engine/internal/api/context_keys"
 	"context_engine/internal/services" // Importamos a los Cirujanos
 )
 
 // TriageContextHandler es el punto final de la ruta POST /api/triage-context
 func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 
+	// Helper para mandar JSON de error limpio
+	sendError := func(msg string, code int) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		json.NewEncoder(w).Encode(services.TriageResponse{
+			Message: msg,
+		})
+	}
+
 	// 0. Securitires passed from middleware & CORS
 	fmt.Println("NUEVA PETICIÓN EN EL HANDLER. Security granted OK.")
 
 	// Extraemos el userID que inyectó el middleware en el contexto
 	ctx := r.Context()
-	userID, _ := ctx.Value("userID").(string)
+	userID, _ := ctx.Value(context_keys.UserIDKey).(string)
 	if userID == "" {
 		userID = "anonymous"
 	}
@@ -26,7 +37,7 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
 		fmt.Println("❌ Error. El Frontend no ha mandado un form-data válido:", err)
-		http.Error(w, "Error leyendo formulario", http.StatusBadRequest)
+		sendError("Error leyendo formulario de triaje", http.StatusBadRequest)
 		return
 	}
 
@@ -59,7 +70,7 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 		file, header, err := r.FormFile("audio")
 		if err != nil {
 			fmt.Println("❌ Error: No hay ni texto ni archivo 'audio' en la petición")
-			http.Error(w, "Falta contexto clínico (Texto o Audio)", http.StatusBadRequest)
+			sendError("Falta contexto clínico (Texto o Audio)", http.StatusBadRequest)
 			return
 		}
 		// "defer" retrasa la ejecución de esta línea hasta que la función handleUpload termine.
@@ -72,7 +83,7 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 		transcribedText, err := services.TranscribeAudio(file, header.Filename)
 		if err != nil {
 			fmt.Println("❌ Fallo crítico en Whisper:", err)
-			http.Error(w, "Error transcribiendo audio", http.StatusInternalServerError)
+			sendError("Error transcribiendo audio. Inténtelo de nuevo.", http.StatusInternalServerError)
 			return
 		}
 		fmt.Println("🗣️ Transcripción real obtenida:", transcribedText)
@@ -82,52 +93,71 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 
 	// --- REDIS with context -------------------------------------
 
-	// 1. ¿El paciente dice que ya ha terminado ("isFinal")?
+	// 1. Recuperamos la ficha clínica de Redis
+	contextRaw := services.TriageContext{}
+	previousContextJSON, _ := services.GetClinicalContext(ctx, userID)
+	if previousContextJSON != "" {
+		json.Unmarshal([]byte(previousContextJSON), &contextRaw)
+	}
+
+	// 2. ¿Es una petición de REINICIO o CIERRE final?
+	newSession := r.FormValue("newSession") == "true"
+	if newSession {
+		fmt.Printf("⚠️ [SISTEMA] Petición de reinicio. Borrando contexto previo para UserID %s\n", userID)
+		_ = services.DeleteClinicalContext(ctx, userID)
+		contextRaw = services.TriageContext{} // Empezamos de cero
+	}
+
 	isFinal := r.FormValue("isFinal") == "true"
 
-	// 2. Recuperamos lo que ya sabíamos de este usuario de la memoria (Redis)
-	previousContext, _ := services.GetClinicalContext(ctx, userID)
-
 	if isFinal {
-		// A. CASO FINAL: El paciente da el OK.
-		if previousContext == "" {
-			http.Error(w, "No hay contexto para finalizar", http.StatusBadRequest)
+		// Solo permitimos finalizar si la IA ya ha marcado el triaje como completo
+		if !contextRaw.IsComplete {
+			sendError("El triaje aún no está listo para enviarse", http.StatusBadRequest)
 			return
 		}
 
 		// Mandamos a la cola de Redis para Spring Boot
 		go func() {
-			// Ahora pasamos la imageUrl (puede ser vacía "")
-			err := services.PublishTriage(ctx, userID, previousContext, imageUrl)
+			err := services.PublishTriage(ctx, userID, previousContextJSON, imageUrl)
 			if err != nil {
 				fmt.Println("⚠️ Error asíncrono publicando en Redis:", err)
 			}
-			// Limpiamos la memoria temporal
 			services.DeleteClinicalContext(ctx, userID)
 		}()
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status": "finalized", "message": "Triaje enviado a revisión médica"}`))
+		responseFinal := services.TriageResponse{
+			IsComplete: true,
+			Message:    "Triaje enviado correctamente al médico.",
+		}
+		json.NewEncoder(w).Encode(responseFinal)
 		return
 	}
 
-	// B. CASO INTERACTIVO: Seguimos preguntando
-	// Llamar al servicio LLaMA 3 con el texto nuevo Y lo que ya sabíamos
-	jsonIAPuro, err := services.AnalyzeTriage(textPatient, previousContext)
+	// 3. CASO INTERACTIVO: Llamada al Motor Elite de 3 Fases
+	responseMessage, err := services.AnalyzeTriageElite(textPatient, &contextRaw)
 	if err != nil {
-		fmt.Println("❌ Fallo crítico en LLaMA:", err)
-		http.Error(w, "Error analizando triaje", http.StatusInternalServerError)
+		fmt.Println("❌ Fallo crítico en el Motor Elite:", err)
+		sendError("Error analizando triaje: El servicio de IA no responde en este momento", http.StatusInternalServerError)
 		return
 	}
 
-	// Guardamos el NUEVO contexto actualizado en Redis para la siguiente pregunta
-	_ = services.SaveClinicalContext(ctx, userID, jsonIAPuro)
+	// 4. Guardamos el estado ACTUALIZADO en Redis
+	updatedJSON, _ := json.Marshal(contextRaw)
+	_ = services.SaveClinicalContext(ctx, userID, string(updatedJSON))
 
-	fmt.Println("🤖 Respuesta interactiva (Contexto Actualizado):\n", jsonIAPuro)
-	// ---------------------------------------------------------
+	fmt.Printf("🤖 IA responde: %d preguntas (Complete: %v, Emerg: %v)\n", len(responseMessage), contextRaw.IsComplete, contextRaw.IsEmergency)
 
-	// 4. Devolver la magia al Navegador de React
+	// 5. Devolver la respuesta "Limpia" al Frontend (Usando Struct Tipado)
+	responseObj := services.TriageResponse{
+		Questions:   responseMessage,
+		CaseTitle:   contextRaw.CaseTitle,
+		IsComplete:  contextRaw.IsComplete,
+		IsEmergency: contextRaw.IsEmergency,
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK) // Código 200 Todo Perfecto
-	w.Write([]byte(jsonIAPuro))
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(responseObj)
 }

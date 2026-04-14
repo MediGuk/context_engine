@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"context_engine/internal/api/context_keys"
 	"context_engine/internal/config"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -98,9 +99,7 @@ func ValidateJWT(next http.HandlerFunc) http.HandlerFunc {
 		// 5.1 Extraer "context"(mochila) de la peticion actual
 		originalCtx := r.Context()
 		// 5.2 Crear key especial para evitar colisiones
-		type contextKey string
-		// 5.3 Crear nueva "context"(mochila) con el userID
-		newCtx := context.WithValue(originalCtx, contextKey("userID"), userID)
+		newCtx := context.WithValue(originalCtx, context_keys.UserIDKey, userID)
 
 		// 5.4 Crear una nueva peticion con el nuevo contexto
 		newRequest := r.WithContext(newCtx)

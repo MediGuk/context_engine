@@ -1,0 +1,42 @@
+### CONTEXTO CLÍNICO PREVIO:
+{{.PreviousContext}}
+
+### HISTORIAL DE PREGUNTAS REALIZADAS:
+{{range .QuestionHistory}}- {{.}}{{else}}Ninguna aún.{{end}}
+
+### NUEVA RESPUESTA DEL PACIENTE:
+"{{.PatientInput}}"
+
+### INSTRUCCIONES DE EXTRACCIÓN:
+1. Analiza la "Nueva Respuesta" teniendo en cuenta la "Última Pregunta" para desambiguar.
+2. Identifica los síntomas (Keys) clínicos detectados.
+3. EXTRAE ATRIBUTOS GENERALES en "attributes" (si están presentes):
+   - "onset": ¿Desde cuándo ocurre? (Ej: "hace 2 días", "desde esta mañana").
+   - "location": ¿En qué parte del cuerpo? (Ej: "abdomen bajo derecho", "lumbar").
+   - "severity": Intensidad, grado o evolución (Ej: "muy fuerte", "38.5 grados", "intermitente").
+4. TRATAMIENTO DE NEGACIONES (CRÍTICO): Si el paciente niega tener un síntoma o dice que NO lo tiene (ej: "sin vómitos", "no tengo fiebre"), DEBES añadir el término médico a "denied_symptoms" y NUNCA incluirlo en "symptoms". Prohibido mezclar negaciones dentro de la descripción de otros síntomas.
+5. Si el paciente menciona algo que ya sabíamos, actualiza la info con el dato más reciente.
+6. Identifica el SÍNTOMA PRINCIPAL (el motivo de consulta más importante) y genera un "case_title" (Título del Caso) de máximo 4 palabras.
+   - Ejemplo: si hay dolor abdominal fuerte, el título es "Dolor abdominal agudo".
+   - Ejemplo: si hay fiebre y tos, el título es "Cuadro febril respiratorio".
+7. Detecta situaciones de riesgo vital en "is_emergency".
+
+### FORMATO DE SALIDA (JSON ESTRICTO):
+{
+  "symptoms": [
+    {
+      "key": "término_médico_en_snake_case",
+      "raw_evidence": "Fragmento exacto del texto del paciente",
+      "attributes": {
+        "onset": "string o null",
+        "location": "string o null",
+        "severity": "string o null"
+      }
+    }
+  ],
+  "denied_symptoms": ["string (ej: fiebre, mareo)"],
+  "case_title": "string (Máximo 4 palabras)",
+  "is_emergency": boolean
+}
+
+

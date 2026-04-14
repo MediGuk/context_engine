@@ -20,14 +20,16 @@ func PublishTriage(ctx context.Context, userID string, aiJSON string, imageUrl s
 	}
 
 	// 2. Mapear al contrato FINAL que espera Java (Spring Boot)
-	// Aquí se filtran los 'datos_faltantes' automáticamente al no estar en la estructura JavaTriageRequest
 	finalReport := JavaTriageRequest{
-		Id:                utils.GenerateID(), // ID ÚNICO via utilitario
-		PatientId:         userID,             // ID del Paciente (Verificado por JWT!)
-		SuggestedCategory: contextRaw.SuggestedCategory, // Categoria sugerida por la IA
-		ResumeClinic:      contextRaw.ResumeClinic, // Resumen clinico del paciente
-		ImageUrl:          imageUrl, // URL de S3 enviada por Go
-		ExtraData:         contextRaw.ExtraData, // Todo detalles tecnicos que ia ha detectado
+		Id:                utils.GenerateID(),
+		PatientId:         userID,
+		SuggestedCategory: contextRaw.SuggestedCategory,
+		ResumeClinic:      contextRaw.ResumeClinic,
+		ImageUrl:          imageUrl,
+		Symptoms:          contextRaw.Symptoms,
+		FullTranscript:    contextRaw.FullTranscript,
+		CaseTitle:         contextRaw.CaseTitle,
+		IsEmergency:       contextRaw.IsEmergency,
 	}
 
 	// 3. Volver a empaquetar todo para la cola
