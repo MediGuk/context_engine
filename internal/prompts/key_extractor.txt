@@ -7,32 +7,37 @@
 ### NUEVA RESPUESTA DEL PACIENTE:
 "{{.PatientInput}}"
 
-### INSTRUCCIONES DE EXTRACCIÓN:
-1. Analiza la "Nueva Respuesta" teniendo en cuenta la "Última Pregunta" y el "CONTEXTO CLÍNICO PREVIO".
-2. SALIDA COMPLETA (CRÍTICO): Tu JSON debe incluir TODOS los síntomas detectados hasta ahora (los del contexto previo + los nuevos), para que no se pierda información en los saltos de turno.
-3. PERSISTENCIA: No elimines síntomas que ya sabíamos a menos que el paciente diga explícitamente que han desaparecido.
-4. EXTRACCIÓN DE ATRIBUTOS (CRÍTICO): 
-   - Para cada síntoma, busca: "onset", "location" y "severity". 
-   - REGLA DE VERACIDAD: Si el paciente NO da un dato claro para un atributo, usa null. NUNCA inventes valores.
-5. TRATAMIENTO DE NEGACIONES: Si el paciente niega algo (ej: "no tengo fiebre"), añádelo a "denied_symptoms".
-6. SÍNTOMA PRINCIPAL: Determina el "case_title" (Título del Caso) más representativo.
+### INSTRUCCIONES DE EXTRACCIÓN (ESTADO TOTAL):
+1. PENSAMIENTO LÓGICO (OBLIGATORIO): Antes de extraer, razona en el campo "thought" sobre toda la conversación. Compara el "CONTEXTO CLÍNICO PREVIO" con la nueva respuesta.
+2. SALIDA COMPLETA (CRÍTICO): Tu JSON debe incluir TODOS los síntomas detectados hasta el momento. No te limites a lo nuevo. Si un síntoma ya existía, inclúyelo de nuevo con su información actualizada.
+3. EXTRACCIÓN DE ATRIBUTOS: 
+   - Para cada síntoma, busca únicamente: "onset" y "severity". 
+   - "onset": Cuándo empezó (ayer, hace 2 horas, etc.).
+   - "severity": Cuanto le duele o le molesta (6/10, leve, insuportable, etc.).
+   - REGLA DE VERACIDAD: Si el paciente NO da un dato claro, usa "". NUNCA inventes valores.
+4. TRATAMIENTO DE NEGACIONES: Si el paciente niega algo, añádelo a "denied_symptoms". Mantén la lista completa de negaciones.
+5. TÍTULO Y EMERGENCIA: 
+   - Mantén o actualiza el "case_title" (Máximo 4 palabras).
+   - Evalúa siempre "is_emergency" basándote en toda la información.
 
 ### FORMATO DE SALIDA (JSON ESTRICTO):
 {
+  "thought": "Tu razonamiento clínico sobre el estado actual del triaje",
   "symptoms": [
     {
       "key": "término_médico_en_snake_case",
-      "raw_evidence": "Fragmento exacto del texto del paciente",
+      "rawEvidence": "Fragmento exacto del texto del paciente",
       "attributes": {
-        "onset": "string o null",
-        "location": "string o null",
-        "severity": "string o null"
+        "onset": "string",
+        "severity": "string"
       }
     }
   ],
-  "denied_symptoms": ["string (ej: fiebre, mareo)"],
-  "case_title": "string (Máximo 4 palabras)",
+  "denied_symptoms": ["string"],
+  "case_title": "string",
   "is_emergency": boolean
 }
+
+
 
 

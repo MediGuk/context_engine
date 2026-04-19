@@ -137,32 +137,38 @@ func AnalyzeTriageElite(patientInput string, context *TriageContext) (string, er
 	
 	// --- FASE 2: PROTOCOLO GENERAL ---
 	protocolPrompt, err := renderTemplate("general_protocol.txt", ProtocolData{
-		CurrentContext:  symptomsToText(context.Symptoms),
-		QuestionHistory: context.QuestionHistory,
-		DeniedSymptoms:  context.DeniedSymptoms,
-		PatientInput:    patientInput,
+		CurrentContext:   symptomsToText(context.Symptoms),
+		QuestionHistory:  context.QuestionHistory,
+		DeniedSymptoms:   context.DeniedSymptoms,
+		PatientInput:     patientInput,
+		StepRedFlagsDone: context.StepRedFlagsDone,
 	})
 	if err != nil {
 		return "", err
 	}
-
+	
 	protocolJSON, err := callLLM(protocolPrompt, true)
 	if err != nil {
 		return "", err
 	}
 	fmt.Printf("🔍 [DEBUG] Protocol RAW JSON: %s\n", protocolJSON)
 
-	var protocolData struct {
-		Question   string `json:"question"`
-		IsComplete bool   `json:"is_complete"`
+	var protocolRes struct {
+		Thought          string `json:"thought"`
+		Question         string `json:"question"`
+		IsComplete       bool   `json:"is_complete"`
+		StepRedFlagsDone bool   `json:"step_red_flags_done"`
 	}
-	json.Unmarshal([]byte(protocolJSON), &protocolData)
+	json.Unmarshal([]byte(protocolJSON), &protocolRes)
 
-	context.IsComplete = protocolData.IsComplete
+	fmt.Printf("🧠 [LOGIC] Protocol Thought: %s\n", protocolRes.Thought)
+
+	context.IsComplete = protocolRes.IsComplete
+	context.StepRedFlagsDone = protocolRes.StepRedFlagsDone
 	// Añadimos la nueva pregunta al historial acumulado
-	if protocolData.Question != "" {
-		context.QuestionHistory = append(context.QuestionHistory, protocolData.Question)
-		context.LastTurnQuestions = []string{protocolData.Question}
+	if protocolRes.Question != "" {
+		context.QuestionHistory = append(context.QuestionHistory, protocolRes.Question)
+		context.LastTurnQuestions = []string{protocolRes.Question}
 	} else {
 		context.LastTurnQuestions = nil
 	}
@@ -187,7 +193,7 @@ func AnalyzeTriageElite(patientInput string, context *TriageContext) (string, er
 		}
 	}
 
-	return protocolData.Question, nil
+	return protocolRes.Question, nil
 }
 
 // --- UTILIDADES INTERNAS ---

@@ -41,75 +41,22 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. ¿El paciente ha escrito Texto o ha mandado Audio?
-	var textPatient string
-
-	// --- NUEVO: ¿Y si ha mandado una imagen? ---
-	imageUrl := ""
-	imageFile, _, err := r.FormFile("image")
-	if err == nil {
-		defer imageFile.Close()
-		// TODO: Implementar subida real a S3. Por ahora simulamos una URL si llega el archivo.
-		imageUrl = "https://mediguk-s3.amazonaws.com/temp-placeholder.jpg"
-		fmt.Println("📸 Imagen detectada. (S3 Upload Placeholder activo)")
+	// 2. ¿Es una petición de REINICIO o CIERRE final?
+	newSession := r.FormValue("newSession") == "true"
+	if newSession {
+		fmt.Printf("⚠️ [SISTEMA] Petición de reinicio. Borrando contexto previo para UserID %s\n", userID)
+		_ = services.DeleteClinicalContext(ctx, userID)
+		// No salimos, permitimos que se cree el nuevo contexto con el texto/audio que llegue
 	}
 
-	// Veiene en campo "text" ???
-	textReceived := strings.TrimSpace(r.FormValue("text"))
-
-	if textReceived != "" {
-		// ¡VÍA RÁPIDA! El paciente ha escrito. Nos saltamos Whisper.
-		fmt.Println("📝 Triaje por texto detectado. Saltando Whisper...")
-		textPatient = textReceived
-
-	} else {
-		// ¡VÍA AUDIO! Si no hay texto, buscamos el archivo de audio.
-		// 2. Extraemos el archivo físicamente de la RAM.
-		// IMPORTANTE: Busca el campo con el nombre que estés usando en tu FormData de Next.js (ej: "file" o "audio")
-		// (Te pongo "audio" como ejemplo estándar, cámbialo si en tu Frontend usas form.append('file', blob))
-		file, header, err := r.FormFile("audio")
-		if err != nil {
-			fmt.Println("❌ Error: No hay ni texto ni archivo 'audio' en la petición")
-			sendError("Falta contexto clínico (Texto o Audio)", http.StatusBadRequest)
-			return
-		}
-		// "defer" retrasa la ejecución de esta línea hasta que la función handleUpload termine.
-		// Es como decir: "Pase lo que pase, asegúrate de cerrar el archivo en la RAM cuando te vayas para no ahogar la memoria".
-		defer file.Close()
-
-		fmt.Printf("🎙️ Audio recibido: %s (%d bytes)\n", header.Filename, header.Size)
-
-		// Llamamos a Whisper para transcribir el audio
-		transcribedText, err := services.TranscribeAudio(file, header.Filename)
-		if err != nil {
-			fmt.Println("❌ Fallo crítico en Whisper:", err)
-			sendError("Error transcribiendo audio. Inténtelo de nuevo.", http.StatusInternalServerError)
-			return
-		}
-		fmt.Println("🗣️ Transcripción real obtenida:", transcribedText)
-
-		textPatient = transcribedText
-	}
-
-	// --- REDIS with context -------------------------------------
-
-	// 1. Recuperamos la ficha clínica de Redis
+	// Recuperamos la ficha clínica de Redis (para saber si podemos finalizar)
 	contextRaw := services.TriageContext{}
 	previousContextJSON, _ := services.GetClinicalContext(ctx, userID)
 	if previousContextJSON != "" {
 		json.Unmarshal([]byte(previousContextJSON), &contextRaw)
 	}
 
-	// 2. ¿Es una petición de REINICIO o CIERRE final?
-	newSession := r.FormValue("newSession") == "true"
-	if newSession {
-		fmt.Printf("⚠️ [SISTEMA] Petición de reinicio. Borrando contexto previo para UserID %s\n", userID)
-		_ = services.DeleteClinicalContext(ctx, userID)
-		contextRaw = services.TriageContext{} // Empezamos de cero
-	}
-
 	isFinal := r.FormValue("isFinal") == "true"
-
 	if isFinal {
 		// Solo permitimos finalizar si la IA ya ha marcado el triaje como completo
 		if !contextRaw.IsComplete {
@@ -117,14 +64,22 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// --- NUEVO: ¿Y si ha mandado una imagen final? ---
+		imageUrl := ""
+		imageFile, _, err := r.FormFile("image")
+		if err == nil {
+			defer imageFile.Close()
+			imageUrl = "https://mediguk-s3.amazonaws.com/temp-placeholder.jpg"
+		}
+
 		// Mandamos a la cola de Redis para Spring Boot
-		go func() {
-			err := services.PublishTriage(ctx, userID, previousContextJSON, imageUrl)
-			if err != nil {
-				fmt.Println("⚠️ Error asíncrono publicando en Redis:", err)
-			}
-			services.DeleteClinicalContext(ctx, userID)
-		}()
+		err = services.PublishTriage(ctx, userID, previousContextJSON, imageUrl)
+		if err != nil {
+			fmt.Println("⚠️ Error publicando en Redis:", err)
+			sendError("Error guardando el triaje final", http.StatusInternalServerError)
+			return
+		}
+		_ = services.DeleteClinicalContext(ctx, userID)
 
 		w.Header().Set("Content-Type", "application/json")
 		responseFinal := services.TriageResponse{
@@ -135,7 +90,33 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. CASO INTERACTIVO: Llamada al Motor Elite de 3 Fases
+	// 3. ¿El paciente ha escrito Texto o ha mandado Audio? (SOLO PARA TRIAJE INTERACTIVO)
+	var textPatient string
+	textReceived := strings.TrimSpace(r.FormValue("text"))
+
+	if textReceived != "" {
+		fmt.Println("📝 Triaje por texto detectado. Saltando Whisper...")
+		textPatient = textReceived
+	} else {
+		file, header, err := r.FormFile("audio")
+		if err != nil {
+			fmt.Println("❌ Error: No hay ni texto ni archivo 'audio' en la petición")
+			sendError("Falta contexto clínico (Texto o Audio)", http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+		fmt.Printf("🎙️ Audio recibido: %s (%d bytes)\n", header.Filename, header.Size)
+
+		transcribedText, err := services.TranscribeAudio(file, header.Filename)
+		if err != nil {
+			fmt.Println("❌ Fallo crítico en Whisper:", err)
+			sendError("Error transcribiendo audio. Inténtelo de nuevo.", http.StatusInternalServerError)
+			return
+		}
+		textPatient = transcribedText
+	}
+
+	// 4. CASO INTERACTIVO: Llamada al Motor Elite de 3 Fases
 	responseMessage, err := services.AnalyzeTriageElite(textPatient, &contextRaw)
 	if err != nil {
 		fmt.Println("❌ Fallo crítico en el Motor Elite:", err)
@@ -143,7 +124,7 @@ func TriageContextHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Guardamos el estado ACTUALIZADO en Redis
+	// 5. Guardamos el estado ACTUALIZADO en Redis
 	updatedJSON, _ := json.Marshal(contextRaw)
 	_ = services.SaveClinicalContext(ctx, userID, string(updatedJSON))
 

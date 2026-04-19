@@ -9,7 +9,7 @@ type TranscriptEntry struct {
 // Symptom representa un hallazgo clínico individual con su evidencia
 type Symptom struct {
 	Key           string            `json:"key"`            // Ej: "fiebre"
-	RawEvidence   string            `json:"raw_evidence"`   // Fragmento de texto original
+	RawEvidence   string            `json:"rawEvidence"`    // Fragmento de texto original
 	Attributes    map[string]string `json:"attributes,omitempty"` // Atributos generales (onset, location, etc)
 }
 
@@ -23,17 +23,18 @@ type TriageContext struct {
 	DeniedSymptoms    []string  `json:"denied_symptoms"`    // Síntomas que el paciente ha descartado (negativos)
 	FullTranscript    []TranscriptEntry `json:"full_transcript"` // El mapa de historial literal
 	IsComplete        bool      `json:"is_complete"`        // ¿Triaje terminado? (Phase 2)
+	StepRedFlagsDone  bool      `json:"step_red_flags_done"` // ¿Ya se ha preguntado por síntomas de alarma?
 	SuggestedCategory string    `json:"suggested_category"` // Especialidad detectada (Phase 2/3)
 	ResumeClinic      string    `json:"resume_clinic"`      // Resumen profesional generado (Phase 3)
 }
 
 // JavaTriageRequest es el contrato FINAL con el backend de Java (Spring Boot)
 type JavaTriageRequest struct {
-	Id                string         `json:"id"`        // ID de la petición de triaje
-	PatientId         string         `json:"patientId"` // ID del paciente
-	SuggestedCategory string         `json:"suggestedCategory"`
-	ResumeClinic      string         `json:"resumeClinic"`
-	ImageUrl          string         `json:"imageUrl,omitempty"` // URL de S3 enviada por Go
+	Id                string            `json:"id"`        // ID de la petición de triaje
+	PatientId         string            `json:"patientId"` // ID del paciente
+	SuggestedCategory string            `json:"suggestedCategory"`
+	ResumeClinic      string            `json:"resumeClinic"`
+	ImageUrl          string            `json:"imageUrl,omitempty"` // URL de S3 enviada por Go
 	Symptoms          []Symptom         `json:"symptoms"`           // Enviamos la lista completa para el dashboard médico
 	FullTranscript    []TranscriptEntry `json:"fullTranscript"`      // El historial literal de charla
 	CaseTitle         string            `json:"caseTitle"`         // Título dinámico del caso
@@ -52,10 +53,11 @@ type ExtractorData struct {
 
 // ProtocolData define los campos para el prompt del general_protocol.txt
 type ProtocolData struct {
-	CurrentContext  string
-	QuestionHistory []string
-	DeniedSymptoms  []string
-	PatientInput    string
+	CurrentContext   string
+	QuestionHistory  []string
+	DeniedSymptoms   []string
+	PatientInput     string
+	StepRedFlagsDone bool
 }
 
 // SummarizerData define los campos para el prompt del clinical_summarizer.txt
