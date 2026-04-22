@@ -215,10 +215,15 @@ func callLLM(prompt string, forceJSON bool) (string, error) {
 
 	client := &http.Client{}
 	res, err := client.Do(req)
-	if err != nil || res.StatusCode != 200 {
-		return "", fmt.Errorf("error Groq: %v", err)
+	if err != nil {
+		return "", fmt.Errorf("error de red con Groq: %v", err)
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != 200 {
+		body, _ := io.ReadAll(res.Body)
+		return "", fmt.Errorf("error Groq (HTTP %d): %s", res.StatusCode, string(body))
+	}
 
 	var output struct {
 		Choices []struct {

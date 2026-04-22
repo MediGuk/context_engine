@@ -7,6 +7,9 @@
 ### NUEVA RESPUESTA DEL PACIENTE:
 "{{.PatientInput}}"
 
+### SÍNTOMAS YA DESCARTADOS (No volver a preguntar):
+{{range .DeniedSymptoms}}- {{.}}{{else}}Ninguna aún.{{end}}
+
 ### INSTRUCCIONES DE EXTRACCIÓN (ESTADO TOTAL):
 1. PENSAMIENTO LÓGICO (OBLIGATORIO): Antes de extraer, razona en el campo "thought" sobre toda la conversación. Compara el "CONTEXTO CLÍNICO PREVIO" con la nueva respuesta.
 2. SALIDA COMPLETA (CRÍTICO): Tu JSON debe incluir TODOS los síntomas detectados hasta el momento. No te limites a lo nuevo. Si un síntoma ya existía, inclúyelo de nuevo con su información actualizada.
@@ -15,7 +18,7 @@
    - "onset": Cuándo empezó (ayer, hace 2 horas, etc.).
    - "severity": Cuanto le duele o le molesta (6/10, leve, insuportable, etc.).
    - REGLA DE VERACIDAD: Si el paciente NO da un dato claro, usa "". NUNCA inventes valores.
-4. TRATAMIENTO DE NEGACIONES: Si el paciente niega algo, añádelo a "denied_symptoms". Mantén la lista completa de negaciones.
+4. TRATAMIENTO DE NEGACIONES: Si el paciente niega algo, añádelo a "denied_symptoms". Mantén la lista completa de negaciones. Usa los términos técnicos (keys) siempre que sea posible para evitar duplicados.
 5. TÍTULO Y EMERGENCIA: 
    - Mantén o actualiza el "case_title" (Máximo 4 palabras).
    - Evalúa siempre "is_emergency" basándote en toda la información.
